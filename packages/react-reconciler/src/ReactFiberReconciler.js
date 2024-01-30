@@ -17,7 +17,6 @@ export function createContainer(containerInfo) {
  * @param {*} container - DOM容器，FiberRootNode。
  */
 export function updateContainer(element, container) {
-  console.log(element, container);
   // 获取当前的根Fiber
   const current = container.current;
   // 创建更新

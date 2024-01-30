@@ -105,7 +105,6 @@ function performUnitOfWork(unitOfWork) {
  * @param {*} unitOfWork - 工作单元。
  */
 function completeUnitOfWork(unitOfWork) {
-  console.log("开启comleteWork阶段");
   let completedWork = unitOfWork;
 
   do {
