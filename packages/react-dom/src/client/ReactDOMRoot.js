@@ -40,7 +40,6 @@ ReactDOMRoot.prototype.render = function (children) {
  */
 export function createRoot(container) {
   const root = createContainer(container);
-  debugger
   listenToAllSupportedEvents(container);
   return new ReactDOMRoot(root);
 }

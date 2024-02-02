@@ -78,6 +78,7 @@ function prepareFreshStack(root) {
  */
 function workLoopSync() {
   while (workInProgress !== null) {
+    debugger
     performUnitOfWork(workInProgress);
   }
 }
