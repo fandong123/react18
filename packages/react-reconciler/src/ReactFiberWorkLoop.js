@@ -2,10 +2,29 @@ import { scheduleCallback } from "scheduler";
 import { createWorkInProgress } from "./ReactFiber";
 import { beginWork } from "./ReactFiberBeginWork";
 import { completeWork } from "./ReactFiberCompleteWork";
-import { NoFlags, MutationMask } from "./ReactFiberFlags";
-import { commitMutationEffectsOnFiber } from './ReactFiberCommitWork';
+import { NoFlags, MutationMask, Passive } from "./ReactFiberFlags";
+// import { commitMutationEffectsOnFiber } from './ReactFiberCommitWork';
+import { finishQueueingConcurrentUpdates } from './ReactFiberConcurrentUpdates';
+import { 
+  commitMutationEffectsOnFiber,
+  commitPassiveUnmountEffects,
+  commitPassiveMountEffects,
+  commitLayoutEffects
+} from './ReactFiberCommitWork';
+
+let rootDoesHavePassiveEffect = false;
+let rootWithPendingPassiveEffects = null;
 
 let workInProgress;
+
+function flushPassiveEffect() {
+  if (rootWithPendingPassiveEffects !== null) {
+    const root = rootWithPendingPassiveEffects;
+    commitPassiveUnmountEffects(root.current);
+    commitPassiveMountEffects(root, root.current);
+  }
+}
+
 /**
  * 在 Fiber 上计划更新根节点。
  * @param {*} root - 根节点。
@@ -39,6 +58,12 @@ function performConcurrentWorkOnRoot(root) {
  */
 function commitRoot(root) {
   const { finishedWork } = root;
+  if ((finishedWork.subtreeFlags & Passive) !== NoFlags || (finishedWork.flags & Passive) !== NoFlags) {
+    if (!rootDoesHavePassiveEffect) {
+      rootDoesHavePassiveEffect = true;
+      scheduleCallback(flushPassiveEffect);
+    }
+  }
   const subtreeHasEffects = (finishedWork.subtreeFlags & MutationMask) !== NoFlags;
   /**
    * eg: 0b0010 & 0b1100  &符号找出相同的位数，没有则为0，与 |符号相反
@@ -51,6 +76,11 @@ function commitRoot(root) {
   
   if (subtreeHasEffects || rootHasEffect) {
     commitMutationEffectsOnFiber(finishedWork, root);
+    commitLayoutEffects(finishedWork, root);
+    if (rootDoesHavePassiveEffect) {
+      rootDoesHavePassiveEffect = false;
+      rootWithPendingPassiveEffects = root;
+    }
   }
   
   root.current = finishedWork;
@@ -71,6 +101,7 @@ function renderRootSync(root) {
  */
 function prepareFreshStack(root) {
   workInProgress = createWorkInProgress(root.current, null);
+  finishQueueingConcurrentUpdates();
 }
 
 /**
@@ -78,7 +109,6 @@ function prepareFreshStack(root) {
  */
 function workLoopSync() {
   while (workInProgress !== null) {
-    debugger
     performUnitOfWork(workInProgress);
   }
 }

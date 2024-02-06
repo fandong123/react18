@@ -63,6 +63,12 @@ export function mountIndeterminateComponent(current, workInProgress, Component) 
   return workInProgress.child;
 }
 
+export function updateFunctionComponent(current, workInProgress, Component, nextProps) {
+  const nextChildren = renderWithHooks(current, workInProgress, Component, nextProps);
+  reconcileChildren(current, workInProgress, nextChildren);
+  return workInProgress.child;
+}
+
 /**
  * 开始根据新的虚拟DOM构建新的Fiber子链表
  * @param {FiberNode} current - 老的Fiber节点
@@ -81,6 +87,10 @@ export function beginWork(current, workInProgress) {
       return updateHostRoot(current, workInProgress);
     case HostComponent:
       return updateHostComponent(current, workInProgress);
+    case FunctionComponent: 
+      const Component = workInProgress.type;
+      const nextProps = workInProgress.pendingProps;
+      return updateFunctionComponent(current, workInProgress, Component, nextProps);
     case HostText:
       return null;
     default:

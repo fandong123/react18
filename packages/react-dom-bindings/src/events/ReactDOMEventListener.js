@@ -29,7 +29,6 @@ export function createEventListenerWrapperWithPriority(
  * @param {Event} nativeEvent - 原生的浏览器事件对象。
  */
 function dispatchDiscreteEvent(domEventName, eventSystemFlags, container, nativeEvent) {
-  debugger
   dispatchEvent(domEventName, eventSystemFlags, container, nativeEvent);
 }
 

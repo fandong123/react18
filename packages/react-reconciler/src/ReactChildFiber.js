@@ -1,6 +1,7 @@
 import { REACT_ELEMENT_TYPE } from "shared/ReactSymbols";
 import { createFiberFromElement, createFiberFromText, createWorkInProgress } from "./ReactFiber";
 import { Placement, ChildDeletion } from "./ReactFiberFlags";
+import { HostText } from "./ReactWorkTags";
 import isArray from "shared/isArray";
 
 /**
