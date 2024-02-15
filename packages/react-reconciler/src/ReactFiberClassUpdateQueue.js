@@ -1,5 +1,9 @@
-import { markUpdateLaneFromFiberToRoot } from './ReactFiberConcurrentUpdates';
+import { enqueueConcurrentClassUpdate } from "./ReactFiberConcurrentUpdates";
 import assign from 'shared/assign';
+import { NoLanes, mergeLanes, isSubsetOfLanes } from './ReactFiberLane';
+
+export const UpdateState = 0;
+
 /**
  * 初始化fiber节点的更新队列
  * @param {FiberNode} fiber - 需要初始化更新队列的fiber节点
@@ -7,6 +11,9 @@ import assign from 'shared/assign';
 export function initialUpdateQueue(fiber) {
   const queue = {
     shared: {
+      baseState: fiber.memoizedState,
+      firstBaseUpdate: null,
+      lastBaseUpdate: null,
       pending: null, // 创建一个新的更新队列，其中pending是一个循环链表
     },
   };
@@ -14,11 +21,12 @@ export function initialUpdateQueue(fiber) {
 }
 
 /**
- * 创建一个状态更新对象
- * @returns {Update} 更新对象
+ * 创建更新对象
+ * @param {number} lane - 车道信息
+ * @returns {Object} update - 返回一个新的更新对象
  */
-export function createUpdate() {
-  const update = {};
+export function createUpdate(lane) {
+  const update = { tag: UpdateState, lane, next: null };
   return update;
 }
 
@@ -28,62 +36,119 @@ export function createUpdate() {
  * @param {Update} update - 待添加的更新对象
  * @returns {FiberNode} fiber根节点
  */
-export function enqueueUpdate(fiber, update) {
+export function enqueueUpdate(fiber, update, lane) {
   const updateQueue = fiber.updateQueue;
-  const pending = updateQueue.shared.pending;
-  // 如果pending为空，则让update自引用形成一个循环链表
-  if (pending === null) {
-    update.next = update;
-  } else {
-    update.next = pending.next;
-    pending.next = update;
-  }
-  // pending始终指向最后一个更新对象，形成一个单向循环链表
-  updateQueue.shared.pending = update;
-  return markUpdateLaneFromFiberToRoot(fiber);
+  const sharedQueue = updateQueue.shared;
+  return enqueueConcurrentClassUpdate(fiber, sharedQueue, update, lane);
 }
 
 /**
- * 根据老状态和更新队列中的更新计算最新的状态
- * @param {FiberNode} workInProgress - 需要计算新状态的fiber节点
+ * 将更新加入队列
+ * @param {Object} fiber - fiber对象
+ * @param {Object} update - 更新对象
+ * @param {number} lane - 车道信息
+ * @returns {Object} 更新后的fiber对象
  */
-export function processUpdateQueue(workInProgress) {
+export function processUpdateQueue(workInProgress, nextProps, renderLanes) {
   const queue = workInProgress.updateQueue;
+  let firstBaseUpdate = queue.shared.firstBaseUpdate;
+  let lastBaseUpdate = queue.shared.lastBaseUpdate;
   const pendingQueue = queue.shared.pending;
-
-  // 如果有更新，则清空更新队列并开始计算新的状态
   if (pendingQueue !== null) {
     queue.shared.pending = null;
     const lastPendingUpdate = pendingQueue;
     const firstPendingUpdate = lastPendingUpdate.next;
-
-    // 把更新链表剪开，变成一个单链表
     lastPendingUpdate.next = null;
-    let newState = workInProgress.memoizedState;
-    let update = firstPendingUpdate;
-
-    // 遍历更新队列，根据老状态和更新对象计算新状态
-    while (update) {
-      newState = getStateFromUpdate(update, newState);
-      update = update.next;
+    if (lastBaseUpdate === null) {
+      firstBaseUpdate = firstPendingUpdate;
+    } else {
+      lastBaseUpdate.next = firstPendingUpdate;
     }
-
-    // 更新fiber节点的memoizedState
+    lastBaseUpdate = lastPendingUpdate;
+  }
+  if (firstBaseUpdate !== null) {
+    let newState = queue.baseState;
+    let newLanes = NoLanes;
+    let newBaseState = null;
+    let newFirstBaseUpdate = null;
+    let newLastBaseUpdate = null;
+    let update = firstBaseUpdate;
+    do {
+      const updateLane = update.lane;
+      if (!isSubsetOfLanes(renderLanes, updateLane)) {
+        const clone = {
+          id: update.id,
+          lane: updateLane,
+          payload: update.payload
+        };
+        if (newLastBaseUpdate === null) {
+          newFirstBaseUpdate = newLastBaseUpdate = clone;
+          newBaseState = newState;
+        } else {
+          newLastBaseUpdate = newLastBaseUpdate.next = clone;
+        }
+        newLanes = mergeLanes(newLanes, updateLane);
+      } else {
+        if (newLastBaseUpdate !== null) {
+          const clone = {
+            id: update.id,
+            lane: 0,
+            payload: update.payload
+          };
+          newLastBaseUpdate = newLastBaseUpdate.next = clone;
+        }
+        newState = getStateFromUpdate(update, newState);
+      }
+      update = update.next;
+    } while (update);
+    if (!newLastBaseUpdate) {
+      newBaseState = newState;
+    }
+    queue.baseState = newBaseState;
+    queue.firstBaseUpdate = newFirstBaseUpdate;
+    queue.lastBaseUpdate = newLastBaseUpdate;
+    workInProgress.lanes = newLanes;
     workInProgress.memoizedState = newState;
   }
 }
 
 /**
- * 根据老状态和更新对象计算新状态
- * @param {Update} update - 更新对象
- * @param {*} prevState - 老状态
- * @returns {*} 新状态
+ * 根据更新计算新状态
+ * @private
+ * @param {Object} update - 更新对象
+ * @param {*} prevState - 上一个状态
+ * @param {*} nextProps - 下一个属性集合
+ * @returns {*} 新的状态
  */
-function getStateFromUpdate(update, prevState) {
-  // switch (update.tag) {
-    // case UpdateState:
+function getStateFromUpdate(update, prevState, nextProps) {
+  switch (update.tag) {
+    case UpdateState:
       const { payload } = update;
-      // 合并prevState和payload为新状态
-      return assign({}, prevState, payload);
-  // }
+      let partialState;
+      if (typeof payload === 'function') {
+        partialState = payload.call(null, prevState, nextProps);
+      } else {
+        partialState = payload;
+      }
+      return assign({}, prevState, partialState);
+  }
+}
+
+/**
+ * 克隆更新队列
+ * @param {Object} current - 当前状态下的fiber对象
+ * @param {Object} workInProgress - 正在工作的fiber对象
+ */
+export function cloneUpdateQueue(current, workInProgress) {
+  const workInProgressQueue = workInProgress.updateQueue;
+  const currentQueue = current.updateQueue;
+  if (currentQueue === workInProgressQueue) {
+    const clone = {
+      baseState: currentQueue.baseState,
+      firstBaseUpdate: currentQueue.firstBaseUpdate,
+      lastBaseUpdate: currentQueue.lastBaseUpdate,
+      shared: currentQueue.shared
+    };
+    workInProgress.updateQueue = clone;
+  }
 }

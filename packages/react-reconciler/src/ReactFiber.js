@@ -1,6 +1,7 @@
 // 导入React中的一些工作标签和标记
 import { HostComponent, HostRoot, IndeterminateComponent, HostText } from "react-reconciler/src/ReactWorkTags";
 import { NoFlags } from "react-reconciler/src/ReactFiberFlags";
+import { NoLanes } from "./ReactFiberLane";
 
 /**
  * 构造函数，用于创建一个新的Fiber节点
@@ -25,6 +26,7 @@ export function FiberNode(tag, pendingProps, key) {
   this.alternate = null;
   this.index = 0;
   this.deletions = null;
+  this.lanes = NoLanes;
 }
 
 /**

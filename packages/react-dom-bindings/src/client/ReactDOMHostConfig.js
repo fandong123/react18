@@ -1,4 +1,6 @@
 // 引入初始属性设置函数
+import { DefaultEventPriority } from "react-reconciler/src/ReactEventPriorities";
+import { getEventPriority } from "../events/ReactDOMEventListener";
 import { setInitialProperties, diffProperties, updateProperties  } from "./ReactDOMComponent";
 import { precacheFiberNode, updateFiberProps } from './ReactDOMComponentTree';
 
@@ -101,4 +103,12 @@ export function prepareUpdate(domElement, type, oldProps, newProps) {
 export function commitUpdate(domElement, updatePayload, type, oldProps, newProps) {
   updateProperties(domElement, updatePayload, type, oldProps, newProps);
   updateFiberProps(domElement, newProps);
+}
+
+export function getCurrentEventPriority() {
+  const currentEvent = window.event;
+  if (currentEvent === undefined) {
+    return DefaultEventPriority;
+  }
+  return getEventPriority(currentEvent.type);
 }

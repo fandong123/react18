@@ -1,7 +1,11 @@
-import getEventTarget from './getEventTarget';
-import { getClosestInstanceFromNode } from '../client/ReactDOMComponentTree';
-import { dispatchEventForPluginEventSystem } from './DOMPluginEventSystem';
-
+import getEventTarget from "./getEventTarget";
+import { getClosestInstanceFromNode } from "../client/ReactDOMComponentTree";
+import { dispatchEventForPluginEventSystem } from "./DOMPluginEventSystem";
+import {
+  DiscreteEventPriority,
+  ContinuousEventPriority,
+  DefaultEventPriority,
+} from "react-reconciler/src/ReactEventPriorities";
 
 /**
  * 创建一个具有优先级的事件监听器包装器。
@@ -17,7 +21,12 @@ export function createEventListenerWrapperWithPriority(
   eventSystemFlags
 ) {
   const listenerWrapper = dispatchDiscreteEvent;
-  return listenerWrapper.bind(null, domEventName, eventSystemFlags, targetContainer);
+  return listenerWrapper.bind(
+    null,
+    domEventName,
+    eventSystemFlags,
+    targetContainer
+  );
 }
 
 /**
@@ -28,7 +37,12 @@ export function createEventListenerWrapperWithPriority(
  * @param {HTMLElement} container - 目标容器，通常是一个HTML元素。
  * @param {Event} nativeEvent - 原生的浏览器事件对象。
  */
-function dispatchDiscreteEvent(domEventName, eventSystemFlags, container, nativeEvent) {
+function dispatchDiscreteEvent(
+  domEventName,
+  eventSystemFlags,
+  container,
+  nativeEvent
+) {
   dispatchEvent(domEventName, eventSystemFlags, container, nativeEvent);
 }
 
@@ -40,7 +54,12 @@ function dispatchDiscreteEvent(domEventName, eventSystemFlags, container, native
  * @param {HTMLElement} targetContainer - 目标容器，通常是一个HTML元素。
  * @param {Event} nativeEvent - 原生的浏览器事件对象。
  */
-export function dispatchEvent(domEventName, eventSystemFlags, targetContainer, nativeEvent) {
+export function dispatchEvent(
+  domEventName,
+  eventSystemFlags,
+  targetContainer,
+  nativeEvent
+) {
   const nativeEventTarget = getEventTarget(nativeEvent);
   const targetInst = getClosestInstanceFromNode(nativeEventTarget);
   dispatchEventForPluginEventSystem(
@@ -50,4 +69,15 @@ export function dispatchEvent(domEventName, eventSystemFlags, targetContainer, n
     targetInst,
     targetContainer
   );
+}
+
+export function getEventPriority(domEventName) {
+  switch (domEventName) {
+    case "click":
+      return DiscreteEventPriority;
+    case "drag":
+      return ContinuousEventPriority;
+    default:
+      return DefaultEventPriority;
+  }
 }

@@ -1,5 +1,6 @@
 import { createHostRootFiber } from './ReactFiber';
 import { initialUpdateQueue } from './ReactFiberClassUpdateQueue';
+import { NoLanes } from './ReactFiberLane';
 
 /**
  * Fiber 根节点对象构造函数。
@@ -7,6 +8,7 @@ import { initialUpdateQueue } from './ReactFiberClassUpdateQueue';
  */
 function FiberRootNode(containerInfo) {
   this.containerInfo = containerInfo; // 容器信息，如 div#root
+  this.pendingLanes = NoLanes;
 }
 
 /**

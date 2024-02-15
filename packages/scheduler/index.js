@@ -1,3 +1,1 @@
-export function scheduleCallback(callback) {
-  requestIdleCallback(callback);
-}
+export * from './forks/Scheduler';
